@@ -1,13 +1,13 @@
 """
-20 Specialized AI Agents powered by Claude.
+20 Specialized AI Agents powered by OpenAI.
 Each agent has a unique personality, expertise, and system prompt.
 """
-import anthropic
+import openai
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler, MessageHandler, filters
 import database as db
 from utils.decorators import register_user, check_banned
-from config import ANTHROPIC_API_KEY, CLAUDE_MODEL, AI_HISTORY_LENGTH
+from config import OPENAI_API_KEY, OPENAI_MODEL, AI_HISTORY_LENGTH
 
 
 # ─── 20 Agent Definitions ─────────────────────────────────────────────────────
@@ -325,12 +325,12 @@ AGENTS = [
 AGENTS_MAP = {a["id"]: a for a in AGENTS}
 
 
-# ─── Claude Client ────────────────────────────────────────────────────────────
+# ─── OpenAI Client ───────────────────────────────────────────────────────────
 
-def get_claude_client():
-    if not ANTHROPIC_API_KEY:
+def get_openai_client():
+    if not OPENAI_API_KEY:
         return None
-    return anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    return openai.OpenAI(api_key=OPENAI_API_KEY)
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -503,14 +503,14 @@ async def process_ai_message(update: Update, text: str, lang: str):
     agent_id = await db.get_user_agent(user.id)
     agent = AGENTS_MAP.get(agent_id, AGENTS[0])
 
-    client = get_claude_client()
+    client = get_openai_client()
     if not client:
         err = (
             "❌ **خطأ:** مفتاح API للذكاء الاصطناعي غير مضبوط.\n"
-            "أضف `ANTHROPIC_API_KEY` في ملف `.env`"
+            "أضف `OPENAI_API_KEY` في ملف `.env`"
         ) if lang == "ar" else (
             "❌ **Error:** AI API key not configured.\n"
-            "Add `ANTHROPIC_API_KEY` to `.env` file"
+            "Add `OPENAI_API_KEY` to `.env` file"
         )
         await update.message.reply_text(err, parse_mode="Markdown")
         return
@@ -521,17 +521,17 @@ async def process_ai_message(update: Update, text: str, lang: str):
     # Save user message
     await db.add_message(user.id, agent_id, "user", text)
 
-    # Get conversation history
+    # Get conversation history and prepend the system message
     history = await db.get_conversation(user.id, agent_id, AI_HISTORY_LENGTH)
+    messages = [{"role": "system", "content": agent["system"]}] + history
 
     try:
-        response = client.messages.create(
-            model=CLAUDE_MODEL,
+        response = client.chat.completions.create(
+            model=OPENAI_MODEL,
             max_tokens=2048,
-            system=agent["system"],
-            messages=history,
+            messages=messages,
         )
-        reply_text = response.content[0].text
+        reply_text = response.choices[0].message.content
         await db.add_message(user.id, agent_id, "assistant", reply_text)
 
         agent_name = agent["name_ar"] if lang == "ar" else agent["name_en"]
@@ -547,7 +547,7 @@ async def process_ai_message(update: Update, text: str, lang: str):
             for chunk in chunks:
                 await update.message.reply_text(chunk, parse_mode="Markdown")
 
-    except anthropic.APIError as e:
+    except openai.APIError as e:
         err = f"❌ خطأ في الذكاء الاصطناعي: {e}" if lang == "ar" else f"❌ AI Error: {e}"
         await update.message.reply_text(err)
     except Exception as e:

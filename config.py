@@ -11,14 +11,14 @@ BOT_USERNAME = os.getenv("BOT_USERNAME", "")
 ADMIN_IDS = [int(x) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip().isdigit()]
 
 # APIs
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY", "")
 
 # Database
 DATABASE_PATH = os.getenv("DATABASE_PATH", "bot.db")
 
-# Claude model
-CLAUDE_MODEL = "claude-sonnet-4-6"
+# OpenAI model
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
 
 # Rate limiting
 RATE_LIMIT_MESSAGES = int(os.getenv("RATE_LIMIT_MESSAGES", "10"))
