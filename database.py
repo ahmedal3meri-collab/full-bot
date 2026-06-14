@@ -26,6 +26,7 @@ async def init_db():
                 chat_id     INTEGER,
                 name        TEXT,
                 content     TEXT,
+                is_private  INTEGER DEFAULT 1,
                 created_at  TEXT DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(user_id, chat_id, name)
             );
@@ -80,6 +81,12 @@ async def init_db():
             );
         """)
         await db.commit()
+        # Migration: add is_private column to existing notes tables
+        try:
+            await db.execute("ALTER TABLE notes ADD COLUMN is_private INTEGER DEFAULT 1")
+            await db.commit()
+        except Exception:
+            pass
 
 
 # ─── Users ────────────────────────────────────────────────────────────────────
@@ -170,21 +177,30 @@ async def get_stats():
 
 # ─── Notes ────────────────────────────────────────────────────────────────────
 
-async def save_note(user_id: int, chat_id: int, name: str, content: str):
+async def save_note(user_id: int, chat_id: int, name: str, content: str, is_private: int = 1):
     async with aiosqlite.connect(DATABASE_PATH) as db:
         await db.execute("""
-            INSERT INTO notes (user_id, chat_id, name, content)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(user_id, chat_id, name) DO UPDATE SET content = excluded.content
-        """, (user_id, chat_id, name, content))
+            INSERT INTO notes (user_id, chat_id, name, content, is_private)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(user_id, chat_id, name) DO UPDATE SET content = excluded.content, is_private = excluded.is_private
+        """, (user_id, chat_id, name, content, is_private))
         await db.commit()
 
 
 async def get_note(user_id: int, chat_id: int, name: str):
     async with aiosqlite.connect(DATABASE_PATH) as db:
+        # Try user's own note first
         async with db.execute(
             "SELECT content FROM notes WHERE user_id=? AND chat_id=? AND name=?",
             (user_id, chat_id, name)
+        ) as cur:
+            row = await cur.fetchone()
+            if row:
+                return row[0]
+        # Fall back to any public note with that name in the same chat
+        async with db.execute(
+            "SELECT content FROM notes WHERE chat_id=? AND name=? AND is_private=0 LIMIT 1",
+            (chat_id, name)
         ) as cur:
             row = await cur.fetchone()
             return row[0] if row else None
@@ -193,10 +209,23 @@ async def get_note(user_id: int, chat_id: int, name: str):
 async def list_notes(user_id: int, chat_id: int):
     async with aiosqlite.connect(DATABASE_PATH) as db:
         async with db.execute(
-            "SELECT name, created_at FROM notes WHERE user_id=? AND chat_id=? ORDER BY name",
-            (user_id, chat_id)
+            """SELECT name, created_at, is_private, user_id
+               FROM notes
+               WHERE chat_id=? AND (user_id=? OR is_private=0)
+               ORDER BY user_id=? DESC, name""",
+            (chat_id, user_id, user_id)
         ) as cur:
             return await cur.fetchall()
+
+
+async def set_note_privacy(user_id: int, chat_id: int, name: str, is_private: int) -> bool:
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cur = await db.execute(
+            "UPDATE notes SET is_private=? WHERE user_id=? AND chat_id=? AND name=?",
+            (is_private, user_id, chat_id, name)
+        )
+        await db.commit()
+        return cur.rowcount > 0
 
 
 async def delete_note(user_id: int, chat_id: int, name: str) -> bool:

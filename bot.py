@@ -79,6 +79,7 @@ BOT_COMMANDS = [
     BotCommand("get", "📖 جلب ملاحظة"),
     BotCommand("notes", "📋 ملاحظاتي"),
     BotCommand("delnote", "🗑️ حذف ملاحظة"),
+    BotCommand("noteprivacy", "🔒 خصوصية ملاحظة"),
     # Reminders
     BotCommand("remind", "⏰ تذكير"),
     BotCommand("reminders", "📅 تذكيراتي"),
