@@ -1,0 +1,30 @@
+# UAE Services Hub — Caddy reverse proxy + HTTPS تلقائي (Let's Encrypt)
+# استبدل {$APP_DOMAIN} بنطاقك الحقيقي في .env — راجع REQUIRED_USER_INPUT.md #1
+
+{$APP_DOMAIN} {
+	encode gzip zstd
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Content-Security-Policy "default-src 'self'; img-src 'self' data: https:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' wss:;"
+	}
+
+	@socketio path /socket.io/*
+	handle @socketio {
+		reverse_proxy realtime:4000
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+
+	log {
+		output file /data/access.log {
+			roll_size 20mb
+			roll_keep 5
+		}
+	}
+}

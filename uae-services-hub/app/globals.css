@@ -1,0 +1,115 @@
+@import "tailwindcss";
+
+/* نظام التصميم — UAE Services Hub
+   الألوان مصدرها lib/config/site.ts (نفس القيم مكرّرة هنا لأن Tailwind v4 يحتاج CSS ثابت،
+   أي تغيير في الهوية يجب أن يُحدَّث بالمكانين حتى تُبنى لوحة إعدادات الهوية بالمرحلة 4) */
+
+:root {
+  --background: #faf7ef;
+  --foreground: #1b1f16;
+  --card: #ffffff;
+  --card-foreground: #1b1f16;
+  --muted: #ede4d1;
+  --muted-foreground: #5c6350;
+
+  --brand-950: #16210f;
+  --brand-900: #1f2b1a;
+  --brand-800: #283a20;
+  --brand-700: #3a4d2c;
+  --brand-600: #4c6339;
+
+  --sand-50: #faf7ef;
+  --sand-100: #f2ead9;
+  --sand-200: #e6d9bd;
+
+  --gold-400: #cba876;
+  --gold-500: #b8925a;
+  --gold-600: #9c7743;
+
+  --border: #e6d9bd;
+  --ring: var(--gold-500);
+  --destructive: #b3432b;
+  --success: #3a6b3a;
+
+  --radius: 0.75rem;
+}
+
+:root[data-theme="dark"] {
+  --background: #12160e;
+  --foreground: #f2ead9;
+  --card: #1a2013;
+  --card-foreground: #f2ead9;
+  --muted: #232a19;
+  --muted-foreground: #b7ae95;
+  --border: #2c3520;
+  --ring: var(--gold-400);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --background: #12160e;
+    --foreground: #f2ead9;
+    --card: #1a2013;
+    --card-foreground: #f2ead9;
+    --muted: #232a19;
+    --muted-foreground: #b7ae95;
+    --border: #2c3520;
+    --ring: var(--gold-400);
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --color-destructive: var(--destructive);
+  --color-success: var(--success);
+
+  --color-brand-950: var(--brand-950);
+  --color-brand-900: var(--brand-900);
+  --color-brand-800: var(--brand-800);
+  --color-brand-700: var(--brand-700);
+  --color-brand-600: var(--brand-600);
+
+  --color-sand-50: var(--sand-50);
+  --color-sand-100: var(--sand-100);
+  --color-sand-200: var(--sand-200);
+
+  --color-gold-400: var(--gold-400);
+  --color-gold-500: var(--gold-500);
+  --color-gold-600: var(--gold-600);
+
+  --font-sans-ar: var(--font-plex-arabic);
+  --font-sans-en: var(--font-plex-latin);
+
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 0.25rem);
+  --radius-sm: calc(var(--radius) - 0.5rem);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+html[dir="rtl"] body {
+  font-family: var(--font-plex-arabic), var(--font-plex-latin), ui-sans-serif, system-ui, sans-serif;
+}
+
+html[dir="ltr"] body {
+  font-family: var(--font-plex-latin), var(--font-plex-arabic), ui-sans-serif, system-ui, sans-serif;
+}
+
+.input {
+  @apply w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring;
+}
+
+.btn-primary {
+  @apply rounded-lg bg-brand-900 px-4 py-2.5 text-sm font-semibold text-gold-400 transition hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-60;
+}
+

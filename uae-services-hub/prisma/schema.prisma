@@ -1,0 +1,809 @@
+// UAE Services Hub — مخطط قاعدة البيانات الكامل
+// راجع DATABASE.md لشرح القرارات (RBAC بجداول، الخصائص الديناميكية، Decimal للأسعار، إلخ)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== المصادقة و RBAC ====================
+
+model Role {
+  id          String           @id @default(cuid())
+  code        String           @unique // guest اُستثني، مسجّل في enum التالي فقط للأدوار المخزّنة
+  nameAr      String
+  nameEn      String
+  isSystem    Boolean          @default(true) // أدوار النظام التسعة لا تُحذف، لكن صلاحياتها قابلة للتعديل
+  permissions RolePermission[]
+  users       User[]
+  createdAt   DateTime         @default(now())
+}
+
+model Permission {
+  id     String           @id @default(cuid())
+  code   String           @unique // e.g. "listing:create", "admin:users:manage"
+  descAr String
+  roles  RolePermission[]
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  BANNED
+  PENDING_VERIFICATION
+}
+
+model User {
+  id              String     @id @default(cuid())
+  email           String?    @unique
+  phone           String?    @unique
+  passwordHash    String
+  fullName        String
+  avatarUrl       String?
+  locale          String     @default("ar") // ar | en
+  status          UserStatus @default(PENDING_VERIFICATION)
+  isEmailVerified Boolean    @default(false)
+  isPhoneVerified Boolean    @default(false)
+  googleId        String?    @unique
+
+  roleId String
+  role   Role   @relation(fields: [roleId], references: [id])
+
+  emirateId String?
+  emirate   Emirate? @relation(fields: [emirateId], references: [id])
+  regionId  String?
+  region    Region?  @relation(fields: [regionId], references: [id])
+
+  sessions        Session[]
+  otpCodes        OtpCode[]
+  passwordResets  PasswordResetToken[]
+  listings        Listing[]
+  company         Company?
+  favorites       Favorite[]
+  serviceRequests ServiceRequest[]
+  sentMessages    Message[]                 @relation("MessageSender")
+  conversations   ConversationParticipant[]
+  reviewsWritten  Review[]                  @relation("ReviewAuthor")
+  notifications   Notification[]
+  reportsFiled    Report[]                  @relation("Reporter")
+  blocksMade      Block[]                   @relation("Blocker")
+  blocksReceived  Block[]                   @relation("Blocked")
+  auditLogs       AuditLog[]
+  addresses       Address[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([roleId])
+  @@index([emirateId])
+}
+
+model Address {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label     String
+  emirateId String
+  emirate   Emirate  @relation(fields: [emirateId], references: [id])
+  regionId  String?
+  region    Region?  @relation(fields: [regionId], references: [id])
+  line1     String
+  lat       Decimal? @db.Decimal(9, 6)
+  lng       Decimal? @db.Decimal(9, 6)
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model Session {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  userAgent String?
+  ip        String?
+  expiresAt DateTime
+  revokedAt DateTime? // إلغاء فوري للجلسة — مطلوب صراحة بالمواصفة الأمنية
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+enum OtpPurpose {
+  PHONE_VERIFICATION
+  LOGIN
+  PASSWORD_RESET
+}
+
+enum OtpChannel {
+  SMS
+  WHATSAPP
+  CONSOLE // وضع التطوير: يُطبع الكود بدل الإرسال — راجع lib/otp/provider.ts
+}
+
+model OtpCode {
+  id          String     @id @default(cuid())
+  userId      String?
+  user        User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  destination String // رقم الهاتف أو البريد
+  codeHash    String
+  purpose     OtpPurpose
+  channel     OtpChannel @default(CONSOLE)
+  attempts    Int        @default(0)
+  consumedAt  DateTime?
+  expiresAt   DateTime
+  createdAt   DateTime   @default(now())
+
+  @@index([destination, purpose])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+}
+
+// ==================== الجغرافيا ====================
+
+model Emirate {
+  id        String             @id @default(cuid())
+  slug      String             @unique
+  nameAr    String
+  nameEn    String
+  sortOrder Int                @default(0)
+  cities    City[]
+  users     User[]
+  addresses Address[]
+  listings  Listing[]
+  companies CompanyCoverage[]
+  requests  ServiceRequest[]
+  articles  KnowledgeArticle[]
+}
+
+model City {
+  id        String    @id @default(cuid())
+  emirateId String
+  emirate   Emirate   @relation(fields: [emirateId], references: [id], onDelete: Cascade)
+  slug      String
+  nameAr    String
+  nameEn    String
+  regions   Region[]
+  listings  Listing[]
+
+  @@unique([emirateId, slug])
+}
+
+model Region {
+  id        String           @id @default(cuid())
+  cityId    String
+  city      City             @relation(fields: [cityId], references: [id], onDelete: Cascade)
+  slug      String
+  nameAr    String
+  nameEn    String
+  users     User[]
+  addresses Address[]
+  listings  Listing[]
+  requests  ServiceRequest[]
+
+  @@unique([cityId, slug])
+}
+
+// ==================== الأقسام والخصائص الديناميكية ====================
+
+model Category {
+  id         String                @id @default(cuid())
+  parentId   String?
+  parent     Category?             @relation("CategoryTree", fields: [parentId], references: [id])
+  children   Category[]            @relation("CategoryTree")
+  slug       String                @unique
+  nameAr     String
+  nameEn     String
+  icon       String?
+  sortOrder  Int                   @default(0)
+  isActive   Boolean               @default(true)
+  attributes AttributeDefinition[]
+  listings   Listing[]
+  services   CompanyService[]
+  requests   ServiceRequest[]
+  articles   KnowledgeArticle[]
+
+  @@index([parentId])
+}
+
+enum AttributeType {
+  STRING
+  NUMBER
+  BOOLEAN
+  SELECT
+  MULTI_SELECT
+  DATE
+}
+
+model AttributeDefinition {
+  id           String                  @id @default(cuid())
+  categoryId   String
+  category     Category                @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  key          String // e.g. "mileage_km"
+  labelAr      String
+  labelEn      String
+  type         AttributeType
+  options      Json? // لخيارات SELECT/MULTI_SELECT: [{ value, labelAr, labelEn }]
+  unit         String?
+  isRequired   Boolean                 @default(false)
+  isFilterable Boolean                 @default(true)
+  sortOrder    Int                     @default(0)
+  values       ListingAttributeValue[]
+
+  @@unique([categoryId, key])
+}
+
+model ListingAttributeValue {
+  id                    String              @id @default(cuid())
+  listingId             String
+  listing               Listing             @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  attributeDefinitionId String
+  attributeDefinition   AttributeDefinition @relation(fields: [attributeDefinitionId], references: [id], onDelete: Cascade)
+  valueString           String?
+  valueNumber           Decimal?            @db.Decimal(14, 2)
+  valueBoolean          Boolean?
+  valueJson             Json? // لـ MULTI_SELECT
+
+  @@unique([listingId, attributeDefinitionId])
+  @@index([attributeDefinitionId, valueString])
+  @@index([attributeDefinitionId, valueNumber])
+}
+
+// ==================== الإعلانات ====================
+
+enum OfferType {
+  SALE
+  RENT_DAILY
+  RENT_WEEKLY
+  RENT_MONTHLY
+  RENT_YEARLY
+  SERVICE
+}
+
+enum ListingStatus {
+  DRAFT
+  PENDING_REVIEW
+  PUBLISHED
+  REJECTED
+  EXPIRED
+  SOLD_OR_RENTED
+  ARCHIVED
+}
+
+enum VerificationStatus {
+  UNVERIFIED
+  PENDING
+  VERIFIED
+}
+
+model Listing {
+  id        String   @id @default(cuid())
+  ownerId   String
+  owner     User     @relation(fields: [ownerId], references: [id])
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
+
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  titleAr       String
+  titleEn       String?
+  descriptionAr String  @db.Text
+  descriptionEn String? @db.Text
+
+  offerType         OfferType
+  price             Decimal   @db.Decimal(12, 2)
+  currency          String    @default("AED")
+  isPriceNegotiable Boolean   @default(false)
+
+  emirateId String
+  emirate   Emirate  @relation(fields: [emirateId], references: [id])
+  cityId    String?
+  city      City?    @relation(fields: [cityId], references: [id])
+  regionId  String?
+  region    Region?  @relation(fields: [regionId], references: [id])
+  lat       Decimal? @db.Decimal(9, 6)
+  lng       Decimal? @db.Decimal(9, 6)
+
+  contactPhone String
+  whatsapp     String?
+
+  status             ListingStatus      @default(DRAFT)
+  verificationStatus VerificationStatus @default(UNVERIFIED)
+  permitNumber       String? // رقم تصريح إعلان عقاري (Trakheesi/DARI) — اختياري، راجع REQUIRED_USER_INPUT #7
+  isFeatured         Boolean            @default(false)
+  isUrgent           Boolean            @default(false)
+  viewsCount         Int                @default(0)
+  expiresAt          DateTime?
+
+  images        ListingImage[]
+  videos        ListingVideo[]
+  attributes    ListingAttributeValue[]
+  favoritedBy   Favorite[]
+  conversations Conversation[]
+  reviews       Review[]
+
+  // tsvector يُضاف ويُدار عبر trigger بميغريشن يدوية — راجع prisma/migrations و DATABASE.md
+  searchVector Unsupported("tsvector")?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([categoryId, status])
+  @@index([emirateId, status])
+  @@index([offerType, status])
+  @@index([price])
+  @@index([isFeatured])
+}
+
+model ListingImage {
+  id        String  @id @default(cuid())
+  listingId String
+  listing   Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  url       String
+  sortOrder Int     @default(0)
+  isCover   Boolean @default(false)
+}
+
+model ListingVideo {
+  id        String  @id @default(cuid())
+  listingId String
+  listing   Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  url       String
+}
+
+model Favorite {
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listingId String
+  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([userId, listingId])
+}
+
+// ==================== الشركات ومقدمو الخدمات ====================
+
+enum CompanyStatus {
+  PENDING_APPROVAL
+  ACTIVE
+  SUSPENDED
+}
+
+model Company {
+  id            String   @id @default(cuid())
+  ownerUserId   String   @unique
+  ownerUser     User     @relation(fields: [ownerUserId], references: [id])
+  name          String
+  slug          String   @unique
+  logoUrl       String?
+  coverUrl      String?
+  descriptionAr String?  @db.Text
+  descriptionEn String?  @db.Text
+  phone         String
+  whatsapp      String?
+  email         String?
+  website       String?
+  lat           Decimal? @db.Decimal(9, 6)
+  lng           Decimal? @db.Decimal(9, 6)
+  openingHours  Json? // { mon: ["09:00","18:00"], ... }
+  isOpenNow     Boolean  @default(true) // يُحدَّث دوريًا عبر worker من openingHours
+
+  tradeLicenseNumber String?
+  tradeLicenseExpiry DateTime?
+  isVerified         Boolean   @default(false)
+  verifiedAt         DateTime?
+
+  status CompanyStatus @default(PENDING_APPROVAL)
+
+  coverage        CompanyCoverage[]
+  services        CompanyService[]
+  portfolio       CompanyPortfolioImage[]
+  listings        Listing[]
+  quotes          Quote[]
+  subscriptions   Subscription[]
+  reviews         Review[]
+  requestsOffered ServiceRequest[]        @relation("MatchedProviders")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CompanyCoverage {
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  emirateId String
+  emirate   Emirate @relation(fields: [emirateId], references: [id])
+
+  @@id([companyId, emirateId])
+}
+
+model CompanyService {
+  id            String   @id @default(cuid())
+  companyId     String
+  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  categoryId    String
+  category      Category @relation(fields: [categoryId], references: [id])
+  titleAr       String
+  titleEn       String?
+  descriptionAr String?  @db.Text
+  priceMin      Decimal? @db.Decimal(12, 2)
+  priceMax      Decimal? @db.Decimal(12, 2)
+  createdAt     DateTime @default(now())
+}
+
+model CompanyPortfolioImage {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  url       String
+  caption   String?
+}
+
+// ==================== الاشتراكات والباقات ====================
+
+model Plan {
+  id                    String         @id @default(cuid())
+  code                  String         @unique // free | basic | pro | premium
+  nameAr                String
+  nameEn                String
+  priceMonthly          Decimal        @db.Decimal(10, 2)
+  priceYearly           Decimal        @db.Decimal(10, 2)
+  maxListings           Int
+  maxImagesPerListing   Int
+  maxBranches           Int            @default(1)
+  maxStaff              Int            @default(1)
+  hasFeaturedListing    Boolean        @default(false)
+  hasTopSearchPlacement Boolean        @default(false)
+  hasVerifiedBadge      Boolean        @default(false)
+  hasAdvancedAnalytics  Boolean        @default(false)
+  monthlyMessagesQuota  Int?
+  isActive              Boolean        @default(true)
+  subscriptions         Subscription[]
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  EXPIRED
+  CANCELED
+}
+
+model Subscription {
+  id        String             @id @default(cuid())
+  companyId String
+  company   Company            @relation(fields: [companyId], references: [id])
+  planId    String
+  plan      Plan               @relation(fields: [planId], references: [id])
+  status    SubscriptionStatus @default(TRIAL)
+  startedAt DateTime           @default(now())
+  expiresAt DateTime
+  autoRenew Boolean            @default(false)
+  payments  Payment[]
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+model Payment {
+  id             String        @id @default(cuid())
+  subscriptionId String?
+  subscription   Subscription? @relation(fields: [subscriptionId], references: [id])
+  amount         Decimal       @db.Decimal(10, 2)
+  currency       String        @default("AED")
+  provider       String? // telr | network_international | checkout_com | stripe — لا مفاتيح بالكود
+  providerRef    String?
+  status         PaymentStatus @default(PENDING)
+  createdAt      DateTime      @default(now())
+}
+
+// ==================== طلبات الخدمة، عروض الأسعار، الحجوزات ====================
+
+enum ServiceRequestStatus {
+  NEW
+  AWAITING_QUOTES
+  QUOTES_RECEIVED
+  QUOTE_ACCEPTED
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELED
+  DISPUTED
+}
+
+model ServiceRequest {
+  id               String                @id @default(cuid())
+  userId           String
+  user             User                  @relation(fields: [userId], references: [id])
+  categoryId       String
+  category         Category              @relation(fields: [categoryId], references: [id])
+  emirateId        String
+  emirate          Emirate               @relation(fields: [emirateId], references: [id])
+  regionId         String?
+  region           Region?               @relation(fields: [regionId], references: [id])
+  budgetMin        Decimal?              @db.Decimal(12, 2)
+  budgetMax        Decimal?              @db.Decimal(12, 2)
+  preferredDate    DateTime?
+  details          String                @db.Text
+  status           ServiceRequestStatus  @default(NEW)
+  images           ServiceRequestImage[]
+  quotes           Quote[]
+  booking          Booking?
+  conversations    Conversation[]
+  reviews          Review[]
+  matchedProviders Company[]             @relation("MatchedProviders")
+  statusHistory    StatusHistoryEntry[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([categoryId, emirateId])
+}
+
+model ServiceRequestImage {
+  id               String         @id @default(cuid())
+  serviceRequestId String
+  serviceRequest   ServiceRequest @relation(fields: [serviceRequestId], references: [id], onDelete: Cascade)
+  url              String
+}
+
+enum QuoteStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+model Quote {
+  id               String         @id @default(cuid())
+  serviceRequestId String
+  serviceRequest   ServiceRequest @relation(fields: [serviceRequestId], references: [id], onDelete: Cascade)
+  companyId        String
+  company          Company        @relation(fields: [companyId], references: [id])
+  price            Decimal        @db.Decimal(12, 2)
+  taxAmount        Decimal        @default(0) @db.Decimal(12, 2)
+  extraFees        Decimal        @default(0) @db.Decimal(12, 2)
+  costBreakdown    Json?
+  terms            String?        @db.Text
+  validUntil       DateTime
+  status           QuoteStatus    @default(PENDING)
+  booking          Booking?
+  createdAt        DateTime       @default(now())
+
+  @@index([serviceRequestId])
+}
+
+enum BookingStatus {
+  PENDING_CONFIRMATION
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELED
+}
+
+model Booking {
+  id               String         @id @default(cuid())
+  serviceRequestId String         @unique
+  serviceRequest   ServiceRequest @relation(fields: [serviceRequestId], references: [id])
+  quoteId          String         @unique
+  quote            Quote          @relation(fields: [quoteId], references: [id])
+  scheduledAt      DateTime
+  status           BookingStatus  @default(PENDING_CONFIRMATION)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+}
+
+model StatusHistoryEntry {
+  id               String         @id @default(cuid())
+  serviceRequestId String
+  serviceRequest   ServiceRequest @relation(fields: [serviceRequestId], references: [id], onDelete: Cascade)
+  fromStatus       String?
+  toStatus         String
+  changedByUserId  String?
+  note             String?
+  createdAt        DateTime       @default(now())
+}
+
+// ==================== المحادثات ====================
+
+model Conversation {
+  id               String                    @id @default(cuid())
+  listingId        String?
+  listing          Listing?                  @relation(fields: [listingId], references: [id])
+  serviceRequestId String?
+  serviceRequest   ServiceRequest?           @relation(fields: [serviceRequestId], references: [id])
+  participants     ConversationParticipant[]
+  messages         Message[]
+  createdAt        DateTime                  @default(now())
+}
+
+model ConversationParticipant {
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([conversationId, userId])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User         @relation("MessageSender", fields: [senderId], references: [id])
+  body           String       @db.Text
+  attachmentUrl  String?
+  isRead         Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId])
+}
+
+enum ReportTargetType {
+  USER
+  MESSAGE
+  REVIEW
+  LISTING
+}
+
+enum ReportStatus {
+  OPEN
+  REVIEWED
+  DISMISSED
+  ACTION_TAKEN
+}
+
+model Report {
+  id         String           @id @default(cuid())
+  reporterId String
+  reporter   User             @relation("Reporter", fields: [reporterId], references: [id])
+  targetType ReportTargetType
+  targetId   String
+  reason     String
+  status     ReportStatus     @default(OPEN)
+  createdAt  DateTime         @default(now())
+}
+
+model Block {
+  blockerId String
+  blocker   User     @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blockedId String
+  blocked   User     @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([blockerId, blockedId])
+}
+
+// ==================== التقييمات ====================
+
+enum ReviewTargetType {
+  COMPANY
+  USER
+}
+
+model Review {
+  id               String           @id @default(cuid())
+  authorId         String
+  author           User             @relation("ReviewAuthor", fields: [authorId], references: [id])
+  targetType       ReviewTargetType
+  companyId        String?
+  company          Company?         @relation(fields: [companyId], references: [id])
+  listingId        String?
+  listing          Listing?         @relation(fields: [listingId], references: [id])
+  serviceRequestId String? // يمنع التقييم إلا بعد إكمال طلب فعلي
+  serviceRequest   ServiceRequest?  @relation(fields: [serviceRequestId], references: [id])
+  rating           Int // 1-5، يُتحقق منه بمنطق التطبيق (Zod)
+  comment          String?          @db.Text
+  providerReply    String?          @db.Text
+  isFlagged        Boolean          @default(false)
+  images           ReviewImage[]
+  createdAt        DateTime         @default(now())
+
+  @@index([companyId])
+}
+
+model ReviewImage {
+  id       String @id @default(cuid())
+  reviewId String
+  review   Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  url      String
+}
+
+// ==================== الإشعارات ====================
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String // quote_received | quote_accepted | request_status_changed | new_message | ...
+  titleAr   String
+  bodyAr    String
+  data      Json?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead])
+}
+
+// ==================== الذكاء الاصطناعي / RAG (المرحلة 5) ====================
+
+model KnowledgeArticle {
+  id             String    @id @default(cuid())
+  titleAr        String
+  titleEn        String?
+  bodyAr         String    @db.Text
+  bodyEn         String?   @db.Text
+  sourceUrl      String?
+  categoryId     String?
+  category       Category? @relation(fields: [categoryId], references: [id])
+  emirateId      String?
+  emirate        Emirate?  @relation(fields: [emirateId], references: [id])
+  lastReviewedAt DateTime?
+  isActive       Boolean   @default(true)
+  qdrantPointId  String? // ربط اختياري بنقطة Qdrant بعد الفهرسة
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model AiConversation {
+  id        String      @id @default(cuid())
+  userId    String?
+  sessionId String
+  messages  AiMessage[]
+  createdAt DateTime    @default(now())
+}
+
+model AiMessage {
+  id               String         @id @default(cuid())
+  aiConversationId String
+  aiConversation   AiConversation @relation(fields: [aiConversationId], references: [id], onDelete: Cascade)
+  role             String // user | assistant | tool
+  content          String         @db.Text
+  toolCalls        Json? // سجل استدعاءات الأدوات (search_listings، إلخ)
+  citations        Json? // { listingIds: [], companyIds: [], articleIds: [] } — للتحقق من عدم الهلوسة
+  tokensUsed       Int?
+  createdAt        DateTime       @default(now())
+}
+
+// ==================== سجل العمليات ====================
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id])
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  ip         String?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([actorId])
+}

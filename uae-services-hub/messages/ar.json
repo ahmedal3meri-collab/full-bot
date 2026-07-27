@@ -1,0 +1,66 @@
+{
+  "common": {
+    "siteName": "مركز الخدمات الإماراتي",
+    "search": "ابحث عن سيارة، عقار، أو خدمة...",
+    "chooseEmirate": "اختر الإمارة",
+    "allEmirates": "كل الإمارات",
+    "login": "تسجيل الدخول",
+    "register": "إنشاء حساب",
+    "logout": "تسجيل الخروج",
+    "myAccount": "حسابي",
+    "language": "English",
+    "aed": "د.إ"
+  },
+  "nav": {
+    "home": "الرئيسية",
+    "categories": "الأقسام",
+    "postAd": "أضف إعلانك",
+    "forCompanies": "للشركات ومقدمي الخدمة"
+  },
+  "home": {
+    "heroTitle": "كل خدمات الإمارات في مكان واحد",
+    "heroSubtitle": "سيارات، عقارات، لوحات مركبات، وخدمات محلية موثوقة — بيع، شراء، إيجار، واطلب عرض سعر خلال دقائق",
+    "searchCta": "ابحث الآن",
+    "sectionsTitle": "تصفّح الأقسام الرئيسية",
+    "featuredTitle": "إعلانات مميزة",
+    "featuredEmpty": "لا توجد إعلانات مميزة حاليًا",
+    "companiesTitle": "شركات موثّقة",
+    "howItWorksTitle": "كيف تعمل المنصة",
+    "howItWorks1Title": "ابحث أو اطلب خدمة",
+    "howItWorks1Body": "تصفّح الإعلانات أو أنشئ طلب خدمة بتفاصيلك واحتياجك",
+    "howItWorks2Title": "قارن العروض",
+    "howItWorks2Body": "يصلك عروض أسعار حقيقية من مزودي خدمة في منطقتك",
+    "howItWorks3Title": "أنجز واحصل على تقييم",
+    "howItWorks3Body": "اختر العرض الأنسب، أكمل الخدمة، وقيّم تجربتك",
+    "providersCtaTitle": "عندك شركة أو تقدّم خدمة؟",
+    "providersCtaBody": "سجّل نشاطك، اظهر أمام آلاف الباحثين عن خدمتك، واستقبل طلبات حقيقية",
+    "providersCtaButton": "سجّل شركتك",
+    "viewAll": "عرض الكل",
+    "verified": "موثّق",
+    "demoDataNotice": "تنويه: بعض البيانات المعروضة تجريبية لأغراض الاختبار فقط"
+  },
+  "footer": {
+    "about": "من نحن",
+    "contact": "تواصل معنا",
+    "terms": "الشروط والأحكام",
+    "privacy": "سياسة الخصوصية",
+    "refund": "سياسة الإلغاء والاسترداد",
+    "faq": "الأسئلة الشائعة",
+    "rights": "جميع الحقوق محفوظة"
+  },
+  "auth": {
+    "loginTitle": "تسجيل الدخول",
+    "registerTitle": "إنشاء حساب جديد",
+    "email": "البريد الإلكتروني",
+    "phone": "رقم الهاتف",
+    "password": "كلمة المرور",
+    "fullName": "الاسم الكامل",
+    "emirate": "الإمارة",
+    "submitLogin": "دخول",
+    "submitRegister": "إنشاء الحساب",
+    "haveAccount": "لديك حساب بالفعل؟",
+    "noAccount": "ليس لديك حساب؟",
+    "invalidCredentials": "بيانات الدخول غير صحيحة",
+    "emailOrPhoneTaken": "البريد أو الهاتف مستخدم مسبقًا"
+  }
+}
